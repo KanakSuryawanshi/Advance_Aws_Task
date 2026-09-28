@@ -5,7 +5,7 @@ const { sendLog } = require('./cloudwatchService');
 const { sendMetric } = require('./cloudwatchService')
 const s3 = require("../config/s3Config");
 
-const uploadToS3 = async (fileBuffer, key, mimeType) => {
+const uploadToS3 = async (fileBuffer, key, mimeType, requestId, userId, route) => {
     const command = new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET,
         Key: key,
@@ -15,13 +15,33 @@ const uploadToS3 = async (fileBuffer, key, mimeType) => {
     try {
         await s3.send(command);
         console.log("S3 upload successful");
-        await sendLog("INFO: S3 upload successful");
-        await sendMetric("DocumentsUploaded");
+        // await sendLog("INFO: S3 upload successful");
+        await sendLog(
+            "INFO",
+            "S3 upload successful",
+            requestId,
+            userId,
+            route,
+            201,
+            null
+        );
+        // await sendMetric("DocumentsUploaded");
+        await sendMetric("UploadSuccessCount", 1, "Count");
 
     } catch (err) {
         console.log("S3 upload failed");
-        await sendLog("ERROR: S3 upload failed");
-        await sendMetric("DocumentsUploadFailed");
+        // await sendLog("ERROR: S3 upload failed");
+        await sendLog(
+            "ERROR",
+            "S3 upload failed",
+            requestId,
+            userId,
+            route,
+            500,
+            null
+        );
+        // await sendMetric("DocumentsUploadFailed");
+        await sendMetric("S3OperationFailureCount", 1, "Count");
 
         return;
     }

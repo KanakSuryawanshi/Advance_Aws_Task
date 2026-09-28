@@ -2,7 +2,7 @@ const pool = require("../config/dbConfig");
 
 const { uploadToS3, deleteFromS3, getDownloadUrl } = require("../services/s3Service");
 const { sendNotification } = require('../services/snsService');
-const { sendLog } = require('../services/cloudwatchService');
+const { sendLog, sendMetric } = require('../services/cloudwatchService');
 
 
 const postDocument = async (req, res) => {
@@ -20,17 +20,19 @@ const postDocument = async (req, res) => {
         }
 
         const key = `documents/user-${userId}/${Date.now()}-${file.originalname}`;
-        await sendLog(`INFO: Upload started - userId=${userId}, fileName=${file.originalname}`);
+        // await sendLog(`INFO: Upload started - userId=${userId}, fileName=${file.originalname}`);
+        await sendLog("INFO", "Upload started", req.requestId, userId, req.originalUrl, null, null);
 
 
-        const s3Url = await uploadToS3(
-            file.buffer,
-            key,
-            file.mimetype);           // Upload file to S3
+        const s3Url = await uploadToS3(file.buffer, key, file.mimetype, req.requestId, userId, req.originalUrl);           // Upload file to S3
 
         // await sendLog("INFO: s3 upload successful");
         if (!s3Url) {
-            return res.status(500).json({ message: "S3 upload failed" });
+            await sendMetric("UploadFailureCount", 1, "Count");
+
+            return res.status(500).json({
+                message: "S3 upload failed"
+            });
         }
 
         const query = `INSERT INTO documents (id, user_id, original_name, s3_key, s3_url, file_size, mime_type) values (?, ?, ?, ?, ?, ?, ?)`;
@@ -47,7 +49,9 @@ const postDocument = async (req, res) => {
         await sendNotification(
             userId,
             key,
-            file.originalname
+            file.originalname,
+            req.requestId,
+            req.originalUrl
         );
 
         // await sendNotification(`Document uploaded successfully : ${file.originalname}`);
